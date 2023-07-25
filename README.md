@@ -17,5 +17,7 @@ TBC
 conda create -n scoehr python=3.10
 conda activate scoehr
 conda install pre-commit
+pre-commit install
+pre-commit run --all-files
 ```
 
