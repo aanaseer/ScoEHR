@@ -1,3 +1,5 @@
+"""This file contains the code for loading the MIMIC-III and Hong datasets."""
+
 import os
 import pickle
 
@@ -11,6 +13,7 @@ class MIMIC3_ICD:
     def __init__(
         self, data_dir="data/mimic_data", data_file="mimic_processed_choi.matrix"
     ):
+        """Loads the MIMIC-III dataset from the data directory."""
         data_path = os.path.join(data_dir, data_file)
         data = np.load(data_path, allow_pickle=True)
         self.dataset_full = torch.from_numpy(data)
@@ -33,6 +36,7 @@ class HongData:
         data_file="data.npy",
         labels_dict="data_dict.pkl",
     ):
+        """Loads the Hong dataset from the data directory."""
         data_path = os.path.join(data_dir, data_file)
         data_labels_path = os.path.join(data_dir, labels_dict)
         self.data_original = np.load(data_path).astype(np.float32)
@@ -66,6 +70,7 @@ class HongData:
         self.dataset_full = torch.from_numpy(data_w_cts_scaling_and_binaries)
 
     def data(self, use_train_test_split=True, test_size=0.30, device="cuda"):
+        """Returns the data in the format (i.e. split or not) specified by the user."""
         if use_train_test_split:
             train_data, test_data = train_test_split(
                 self.dataset_full, test_size=test_size, random_state=51
@@ -76,10 +81,12 @@ class HongData:
         return data_out
 
     def reverse_minmaxscaling(self, scaled_data):
+        """Reverses the minmax scaling applied to the data."""
         reverse = self.fitted_scaler.inverse_transform(scaled_data)
         return reverse
 
     def reverse_sin_cos_transformer(self, sin_component, cos_component, period):
+        """Reverses the sin/cos transformation applied to the data."""
         x = np.mod(
             np.round(
                 (np.degrees(np.arctan2(sin_component, cos_component))) / (360 / period)
@@ -89,10 +96,7 @@ class HongData:
         return x
 
     def clean_up_data(self, data_set):
-        """Converts the data into a readable format. I.e. removes sin/cos components and reverses minmax scaling in the
-        dataset.
-        data_set: numpy array"""
-
+        """Converts the data into a readable format. (removes sin/cos components and reverses minmax scaling)"""
         cols_to_ignore = [
             "arrivalday_cos_component",
             "arrivalday_sin_component",
