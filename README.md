@@ -9,3 +9,13 @@
 
 TBC
 
+## Requirements
+
+### Conda Instructions
+
+```
+conda create -n scoehr python=3.10
+conda activate scoehr
+conda install pre-commit
+```
+
