@@ -2,6 +2,7 @@
 
 import os
 import pickle
+from abc import ABCMeta, abstractmethod
 
 import numpy as np
 import torch
@@ -9,7 +10,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
 
-class Dataset:
+class Dataset(metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, data_dir, data_file):
+        pass
+
     def data(self, use_train_test_split=True, test_size=0.30):
         if use_train_test_split:
             train_data, test_data = train_test_split(
