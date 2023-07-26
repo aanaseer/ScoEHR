@@ -190,3 +190,7 @@ $RECYCLE.BIN/
 *.lnk
 
 # .gitignore generated using https://www.toptal.com/developers/gitignore/api/macos,pycharm,visualstudiocode,windows
+
+
+# Additions
+data/
