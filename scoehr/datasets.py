@@ -9,7 +9,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
 
-class MIMIC3_ICD:
+class Dataset:
+    def data(self, use_train_test_split=True, test_size=0.30):
+        if use_train_test_split:
+            train_data, test_data = train_test_split(
+                self.dataset_full, test_size=test_size, random_state=51
+            )
+            return (train_data, test_data)
+        else:
+            return self.dataset_full
+
+
+class MIMIC3_ICD(Dataset):
     def __init__(
         self, data_dir="data/mimic_data", data_file="mimic_processed_choi.matrix"
     ):
@@ -18,18 +29,19 @@ class MIMIC3_ICD:
         data = np.load(data_path, allow_pickle=True)
         self.dataset_full = torch.from_numpy(data)
 
-    def data(self, use_train_test_split=True, test_size=0.30):
-        if use_train_test_split:
-            train_data, test_data = train_test_split(
-                self.dataset_full, test_size=test_size, random_state=51
-            )
-            data_out = (train_data, test_data)
-        else:
-            data_out = self.dataset_full
-        return data_out
+
+def reverse_sin_cos_transformer(sin_component, cos_component, period):
+    """Reverses the sin/cos transformation applied to the data."""
+    x = np.mod(
+        np.round(
+            (np.degrees(np.arctan2(sin_component, cos_component))) / (360 / period)
+        ),
+        period,
+    )
+    return x
 
 
-class HongData:
+class HongData(Dataset):
     def __init__(
         self,
         data_dir="data/hong_data",
@@ -69,31 +81,10 @@ class HongData:
         ]
         self.dataset_full = torch.from_numpy(data_w_cts_scaling_and_binaries)
 
-    def data(self, use_train_test_split=True, test_size=0.30, device="cuda"):
-        """Returns the data in the format (i.e. split or not) specified by the user."""
-        if use_train_test_split:
-            train_data, test_data = train_test_split(
-                self.dataset_full, test_size=test_size, random_state=51
-            )
-            data_out = (train_data, test_data)
-        else:
-            data_out = self.dataset_full
-        return data_out
-
     def reverse_minmaxscaling(self, scaled_data):
         """Reverses the minmax scaling applied to the data."""
         reverse = self.fitted_scaler.inverse_transform(scaled_data)
         return reverse
-
-    def reverse_sin_cos_transformer(self, sin_component, cos_component, period):
-        """Reverses the sin/cos transformation applied to the data."""
-        x = np.mod(
-            np.round(
-                (np.degrees(np.arctan2(sin_component, cos_component))) / (360 / period)
-            ),
-            period,
-        )
-        return x
 
     def clean_up_data(self, data_set):
         """Converts the data into a readable format. (removes sin/cos components and reverses minmax scaling)"""
@@ -119,13 +110,13 @@ class HongData:
         month_indices = [3, 4]
         arrivalday_cos = data_set[:, days_indices[0]]
         arrivalday_sin = data_set[:, days_indices[1]]
-        arrivalday_retrieved = self.reverse_sin_cos_transformer(
+        arrivalday_retrieved = reverse_sin_cos_transformer(
             arrivalday_cos, arrivalday_sin, period=7
         )
 
         arrivalmonth_cos = data_set[:, month_indices[0]]
         arrivalmonth_sin = data_set[:, month_indices[1]]
-        arrivalmonth_retrieved = self.reverse_sin_cos_transformer(
+        arrivalmonth_retrieved = reverse_sin_cos_transformer(
             arrivalmonth_cos, arrivalmonth_sin, period=12
         )
 
