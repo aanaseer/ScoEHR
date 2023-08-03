@@ -1,10 +1,18 @@
 """
 Contains code for the UNet model along with helper functions used to build it.
 
+Code in this file is adapted from [1]. Modifications brought include:
+    - renaming Swish to SiLU.
+    - changing UNet to take the argument encoded_latent_embedding_dim instead of input_height and
+      modification of the UNet to process encoded_latent_embedding_dim within it.
+
+Note that [1] made use of code from [2] and [3] for their UNet implementation.
+
 References:
-    Copied and modified from https://github.com/CW-Huang/sdeflow-light/blob/main/lib/models/unet.py
-    Copied and modified from https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/models/unet.py
-    Copied and modified from https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/nn.py
+    [1] https://github.com/CW-Huang/sdeflow-light/blob/main/lib/models/unet.py
+    [2] https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/models/unet.py
+    [3] https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/nn.py
+
 """
 
 import math
@@ -18,7 +26,7 @@ import torch.nn.functional as F
 from torch.nn.init import _calculate_fan_in_and_fan_out
 
 
-class Swish(nn.Module):
+class SiLU(nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -56,7 +64,7 @@ class ResidualBlock(nn.Module):
         conv_shortcut=False,
         dropout=0.0,
         normalize=group_norm,
-        act=Swish(),
+        act=SiLU(),
     ):
         super().__init__()
         self.in_ch = in_ch
@@ -262,7 +270,7 @@ def get_sinusoidal_positional_embedding(
 
 
 class TimestepEmbedding(nn.Module):
-    def __init__(self, embedding_dim, hidden_dim, output_dim, act=Swish()):
+    def __init__(self, embedding_dim, hidden_dim, output_dim, act=SiLU()):
         super().__init__()
 
         self.embedding_dim = embedding_dim
@@ -293,7 +301,7 @@ class UNet(nn.Module):
         attn_resolutions=(16,),
         dropout=0.0,
         resamp_with_conv=True,
-        act=Swish(),
+        act=SiLU(),
         normalize=group_norm,
     ):
         super().__init__()
