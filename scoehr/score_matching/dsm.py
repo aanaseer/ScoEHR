@@ -35,7 +35,7 @@ class DenoisingScoreMatching(nn.Module):
         self.score_net = score_net
         self.T = T
         self.padding_required = padding_required
-        
+
     @torch.enable_grad()
     def loss_fn(self, x):
         t = torch.linspace(1 / x.size(0) + 1e-3, 1 - 1 / x.size(0), x.size(0)) + (
