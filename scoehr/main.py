@@ -10,141 +10,26 @@ import torch
 import torchsde
 from datasets import HongData, MIMIC3_ICD
 from models.autoencoder import Autoencoder
-
-# from Models.models import MedMLP, MLP
 from models.unet import UNet
 from score_matching.dsm import DenoisingScoreMatching
 from score_matching.sde_library import ReverseSDE, VPSDE, WrapperForTorchSDE
 from torch.utils.data import DataLoader
-from utils.train_autoencoder_utils import train_autoencoder
-from utils.train_scorenet import train_score_net
-from utils.utils import convert_to_binary, create, weights_init
-
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-experiment_name = time.strftime("%Y%m%d-%H%M%S")
-
-arg_parser = argparse.ArgumentParser()
-
-arg_parser.add_argument(
-    "--mode", type=str, choices=["train", "generate"], default="train"
-)
-arg_parser.add_argument(
-    "--load_checkpoint_score_net", type=bool, default=False
-)  # False for training
-arg_parser.add_argument(
-    "--load_checkpoint_autoencoder", type=bool, default=False
-)  # False for training
-arg_parser.add_argument("--use_autoencoder", type=bool, default=True)
-arg_parser.add_argument(
-    "--score_net_architecture",
-    type=str,
-    choices=["sdeflow_unet"],
-    default="sdeflow_unet",
-)
-
-arg_parser.add_argument("--expname", type=str, default=experiment_name)
-arg_parser.add_argument("--output_dir", type=str, default="outputs")
-arg_parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
-
-arg_parser.add_argument(
-    "--loading_checkpoint_filepath_score_net",
-    type=str,
-    default=None,
-)
-arg_parser.add_argument(
-    "--data_type", type=str, choices=["binary", "mixed"], default="mixed"
-)
-arg_parser.add_argument(
-    "--dataset",
-    type=str,
-    choices=["mimic3_icd_binary", "hong"],
-    default="hong",
-)
-arg_parser.add_argument("--n_epochs_score_net", type=int, default=200)
-arg_parser.add_argument("--lr_score_net", type=float, default=0.001)
-arg_parser.add_argument("--batch_size", type=int, default=256)
-arg_parser.add_argument("--T", type=float, default=1.0)
-arg_parser.add_argument("--output_step", type=int, default=1)
-arg_parser.add_argument("--checkpoint_save_step_score_net", type=int, default=1)
-arg_parser.add_argument("--n_epochs_autoencoder", type=int, default=200)
-arg_parser.add_argument("--enc_in_dim", type=int, default=625)  # MIMIC = 1071; hong=625
-arg_parser.add_argument("--enc_out_dim", type=int, default=144)  # MIMIC = 144; UCI = 64
-arg_parser.add_argument("--lr_autoencoder", type=float, default=0.001)  # MIMIC 0.001
-arg_parser.add_argument(
-    "--score_net_in_dim", type=int, default=144
-)  # if using autoenc: MIMIC = 144
-# o/w this should be the same as column size
-arg_parser.add_argument(
-    "--score_net_index_dim", type=int, default=1
-)  # 1 for all -- this is time dim
-arg_parser.add_argument(
-    "--score_net_hidden_dim", type=int, default=144
-)  # 128 for sample data   # MIMIC = 144;
-arg_parser.add_argument("--num_samples_to_generate", type=int, default=1000)
-arg_parser.add_argument("--euler_maruyama_time_steps", type=int, default=1000)
-arg_parser.add_argument("--test_train_size", type=float, default=0.30)
-arg_parser.add_argument("--save_test_train_data", type=bool, default=False)
-arg_parser.add_argument("--save_generated_data", type=bool, default=True)
-arg_parser.add_argument(
-    "--data_dir",
-    type=str,
-    default="data/hong_data",
-    choices=["data/hong_data", "data/mimic_data"],
-)
-arg_parser.add_argument(
-    "--loading_checkpoint_filepath_autoencoder",
-    type=str,
-    default=None,
-)
-arg_parser.add_argument("--output_step_autoencoder", type=int, default=50)
-arg_parser.add_argument("--checkpoint_save_step_autoencoder", type=int, default=50)
-arg_parser.add_argument("--padding_required", type=bool, default=False)
-
-args = arg_parser.parse_args()
-if not args.use_autoencoder:
-    folder_name_keys = [
-        "expname",
-        "mode",
-        "dataset",
-        "score_net_architecture",
-        "n_epochs_score_net",
-        "lr_score_net",
-        "batch_size",
-    ]
-else:
-    folder_name_keys = [
-        "expname",
-        "mode",
-        "dataset",
-        "score_net_architecture",
-        "n_epochs_score_net",
-        "lr_score_net",
-        "batch_size",
-        "n_epochs_autoencoder",
-        "lr_autoencoder",
-    ]
-
-# Setting up the output directory
-folder_name = "-".join([str(getattr(args, k)) for k in folder_name_keys])
-create(args.output_dir, folder_name)
-output_dir_path = os.path.join(args.output_dir, folder_name)
-
-checkpoint_dir_path = os.path.join(output_dir_path, args.checkpoint_dir)
-generated_data_dir_path = os.path.join(output_dir_path, "generated_data")
-test_train_data_dump_path = os.path.join(output_dir_path, "test_train_data_used")
-create(checkpoint_dir_path)
+from train.train_autoencoder_utils import train_autoencoder
+from train.train_scorenet import train_score_net
+from utils.convert_data_to_binary import convert_to_binary
+from utils.create_directory import create
+from utils.initialise_weights import weights_init
 
 
 # Selecting a dataset
 def choose_dataset(
-    dataset_name=args.dataset,
-    batch_size=args.batch_size,
-    test_size=args.test_train_size,
-    save_test_train_data=args.save_test_train_data,
-    device=device,
-    data_type=args.data_type,
-    data_dir=args.data_dir,
+    dataset_name,
+    batch_size,
+    test_size,
+    save_test_train_data,
+    device,
+    data_type,
+    data_dir,
 ):
     if dataset_name == "mimic3_icd_binary":
         train_data, test_data = MIMIC3_ICD(data_dir=data_dir).data(
@@ -185,21 +70,20 @@ def choose_dataset(
             f"==> A copy of the test and train data saved to {test_train_data_dump_path}."
         )
 
+    enc_in_dim = train_data.shape[1]
+
     if data_type == "mixed":
-        return train_dataloader, binary_indices, cts_indices
+        return train_dataloader, binary_indices, cts_indices, enc_in_dim
     else:
-        return train_dataloader
+        return train_dataloader, enc_in_dim
 
 
 def choose_score_net_architecture(
-    score_net_architecture=args.score_net_architecture,
-    score_net_in_dim=args.score_net_in_dim,
-    score_net_index_dim=args.score_net_index_dim,
-    score_net_hidden_dim=args.score_net_hidden_dim,
-    device=device,
-    channel_mult=None,
-    num_res_blocks=None,
-    dropout=None,
+    score_net_architecture,
+    score_net_in_dim,
+    channel_mult,
+    num_res_blocks,
+    dropout,
 ):
     if dropout is None:
         dropout = 0
@@ -227,37 +111,35 @@ def choose_score_net_architecture(
 
 # Initialise SDE, score_net, optimiser
 def initialise_model(
-    score_net_in_dim=args.score_net_in_dim,
-    score_net_index_dim=args.score_net_index_dim,
-    score_net_hidden_dim=args.score_net_hidden_dim,
-    device=device,
-    T=args.T,
-    lr_score_net=args.lr_score_net,
-    checkpoint_dir_path=checkpoint_dir_path,
-    load_checkpoint_score_net=args.load_checkpoint_score_net,
-    loading_checkpoint_filepath_score_net=args.loading_checkpoint_filepath_score_net,
-    dataset=args.dataset,
-    use_autoencoder=args.use_autoencoder,
-    enc_in_dim=args.enc_in_dim,
-    enc_out_dim=args.enc_out_dim,
-    lr_autoencoder=args.lr_autoencoder,
-    load_checkpoint_autoencoder=args.load_checkpoint_autoencoder,
-    loading_checkpoint_filepath_autoencoder=args.loading_checkpoint_filepath_autoencoder,
-    data_type=args.data_type,
-    batch_size=args.batch_size,
-    padding_required=args.padding_required,
-    channel_mult=None,
-    num_res_blocks=None,
-    dropout=None,
-    data_dir=args.data_dir,
+    score_net_architecture,
+    score_net_in_dim,
+    device,
+    T,
+    lr_score_net,
+    checkpoint_dir_path,
+    load_checkpoint_score_net,
+    loading_checkpoint_filepath_score_net,
+    dataset,
+    use_autoencoder,
+    enc_out_dim,
+    lr_autoencoder,
+    load_checkpoint_autoencoder,
+    loading_checkpoint_filepath_autoencoder,
+    data_type,
+    batch_size,
+    padding_required,
+    channel_mult,
+    num_res_blocks,
+    dropout,
+    test_size,
+    save_test_train_data,
+    data_dir,
 ):
     print("==> Initialising SDEs, models, optimisers, loss functions and dataloaders.")
     sde = VPSDE()
-    # score_net = MLP(in_dim=score_net_in_dim, index_dim=score_net_index_dim, hidden_dim=score_net_hidden_dim).to(device)
     score_net = choose_score_net_architecture(
+        score_net_architecture=score_net_architecture,
         score_net_in_dim=score_net_in_dim,
-        score_net_index_dim=score_net_index_dim,
-        score_net_hidden_dim=score_net_hidden_dim,
         channel_mult=channel_mult,
         num_res_blocks=num_res_blocks,
         dropout=dropout,
@@ -283,8 +165,14 @@ def initialise_model(
     reverse_sde = ReverseSDE(sde=sde, score_net=score_net, T=T)
 
     if data_type == "mixed":
-        train_dataloader, binary_indices, cts_indices = choose_dataset(
-            dataset, data_type=data_type, batch_size=batch_size, data_dir=data_dir
+        train_dataloader, binary_indices, cts_indices, enc_in_dim = choose_dataset(
+            dataset_name=dataset,
+            batch_size=batch_size,
+            test_size=test_size,
+            save_test_train_data=save_test_train_data,
+            device=device,
+            data_type=data_type,
+            data_dir=data_dir,
         )
         init_objects = [
             sde,
@@ -297,8 +185,14 @@ def initialise_model(
             cts_indices,
         ]
     if data_type != "mixed":
-        train_dataloader = choose_dataset(
-            dataset, data_type=data_type, batch_size=batch_size, data_dir=data_dir
+        train_dataloader, enc_in_dim = choose_dataset(
+            dataset_name=dataset,
+            batch_size=batch_size,
+            test_size=test_size,
+            save_test_train_data=save_test_train_data,
+            device=device,
+            data_type=data_type,
+            data_dir=data_dir,
         )
         init_objects = [
             sde,
@@ -347,36 +241,37 @@ def initialise_model(
             [autoencoder, decoder, optimiser_autoencoder, loss_fn_instance_autoencoder]
         )
 
-    # sde, score_net, reverse_sde, optimiser_score_net, train_dataloader, loss_fn_instance_dsm, autoencoder, decoder, optimiser_autoencoder, loss_fn_instance_autoencoder
     return init_objects
 
 
 def initiate_training(
-    n_epochs_score_net=args.n_epochs_score_net,
-    output_step_score_net=args.output_step,
-    checkpoint_save_step_score_net=args.checkpoint_save_step_score_net,
-    checkpoint_dir_path=checkpoint_dir_path,
-    use_autoencoder=args.use_autoencoder,
-    n_epochs_autoencoder=args.n_epochs_autoencoder,
-    output_step_autoencoder=args.output_step_autoencoder,
-    checkpoint_save_step_autoencoder=args.checkpoint_save_step_autoencoder,
-    batch_size=args.batch_size,
-    data_type=args.data_type,
-    dataset=args.dataset,
-    score_net_in_dim=args.score_net_in_dim,
-    score_net_index_dim=args.score_net_index_dim,
-    score_net_hidden_dim=args.score_net_hidden_dim,
-    padding_required=args.padding_required,
-    enc_in_dim=args.enc_in_dim,
-    channel_mult=None,
-    num_res_blocks=None,
-    dropout=None,
-    lr_score_net=args.lr_score_net,
-    load_checkpoint_score_net=args.load_checkpoint_score_net,
-    loading_checkpoint_filepath_score_net=args.loading_checkpoint_filepath_score_net,
-    load_checkpoint_autoencoder=args.load_checkpoint_autoencoder,
-    loading_checkpoint_filepath_autoencoder=args.loading_checkpoint_filepath_autoencoder,
-    data_dir=args.data_dir,
+    n_epochs_score_net,
+    output_step_score_net,
+    checkpoint_save_step_score_net,
+    checkpoint_dir_path,
+    use_autoencoder,
+    n_epochs_autoencoder,
+    output_step_autoencoder,
+    checkpoint_save_step_autoencoder,
+    batch_size,
+    data_type,
+    dataset,
+    score_net_architecture,
+    score_net_in_dim,
+    padding_required,
+    channel_mult,
+    num_res_blocks,
+    dropout,
+    lr_score_net,
+    lr_autoencoder,
+    T,
+    load_checkpoint_score_net,
+    loading_checkpoint_filepath_score_net,
+    load_checkpoint_autoencoder,
+    loading_checkpoint_filepath_autoencoder,
+    data_dir,
+    test_size,
+    save_test_train_data,
 ):
     os.makedirs(checkpoint_dir_path, exist_ok=True)
     print("==> Commencing training.")
@@ -397,23 +292,28 @@ def initiate_training(
                 optimiser_autoencoder,
                 loss_fn_instance_autoencoder,
             ) = initialise_model(
+                score_net_architecture=score_net_architecture,
                 score_net_in_dim=score_net_in_dim,
-                score_net_index_dim=score_net_index_dim,
-                score_net_hidden_dim=score_net_hidden_dim,
+                device=device,
+                T=T,
+                lr_score_net=lr_score_net,
+                checkpoint_dir_path=checkpoint_dir_path,
+                load_checkpoint_score_net=load_checkpoint_score_net,
+                loading_checkpoint_filepath_score_net=loading_checkpoint_filepath_score_net,
                 dataset=dataset,
+                use_autoencoder=use_autoencoder,
+                enc_out_dim=score_net_in_dim,
+                lr_autoencoder=lr_autoencoder,
+                load_checkpoint_autoencoder=load_checkpoint_autoencoder,
+                loading_checkpoint_filepath_autoencoder=loading_checkpoint_filepath_autoencoder,
                 data_type=data_type,
                 batch_size=batch_size,
-                enc_out_dim=score_net_in_dim,
+                padding_required=padding_required,
                 channel_mult=channel_mult,
                 num_res_blocks=num_res_blocks,
                 dropout=dropout,
-                lr_score_net=lr_score_net,
-                enc_in_dim=enc_in_dim,
-                padding_required=padding_required,
-                load_checkpoint_score_net=load_checkpoint_score_net,
-                loading_checkpoint_filepath_score_net=loading_checkpoint_filepath_score_net,
-                load_checkpoint_autoencoder=load_checkpoint_autoencoder,
-                loading_checkpoint_filepath_autoencoder=loading_checkpoint_filepath_autoencoder,
+                test_size=test_size,
+                save_test_train_data=save_test_train_data,
                 data_dir=data_dir,
             )
 
@@ -443,23 +343,28 @@ def initiate_training(
                 optimiser_autoencoder,
                 loss_fn_instance_autoencoder,
             ) = initialise_model(
+                score_net_architecture=score_net_architecture,
                 score_net_in_dim=score_net_in_dim,
-                score_net_index_dim=score_net_index_dim,
-                score_net_hidden_dim=score_net_hidden_dim,
+                device=device,
+                T=T,
+                lr_score_net=lr_score_net,
+                checkpoint_dir_path=checkpoint_dir_path,
+                load_checkpoint_score_net=load_checkpoint_score_net,
+                loading_checkpoint_filepath_score_net=loading_checkpoint_filepath_score_net,
                 dataset=dataset,
+                use_autoencoder=use_autoencoder,
+                enc_out_dim=score_net_in_dim,
+                lr_autoencoder=lr_autoencoder,
+                load_checkpoint_autoencoder=load_checkpoint_autoencoder,
+                loading_checkpoint_filepath_autoencoder=loading_checkpoint_filepath_autoencoder,
                 data_type=data_type,
                 batch_size=batch_size,
-                enc_out_dim=score_net_in_dim,
+                padding_required=padding_required,
                 channel_mult=channel_mult,
                 num_res_blocks=num_res_blocks,
                 dropout=dropout,
-                lr_score_net=lr_score_net,
-                enc_in_dim=enc_in_dim,
-                padding_required=padding_required,
-                load_checkpoint_score_net=load_checkpoint_score_net,
-                loading_checkpoint_filepath_score_net=loading_checkpoint_filepath_score_net,
-                load_checkpoint_autoencoder=load_checkpoint_autoencoder,
-                loading_checkpoint_filepath_autoencoder=loading_checkpoint_filepath_autoencoder,
+                test_size=test_size,
+                save_test_train_data=save_test_train_data,
                 data_dir=data_dir,
             )
 
@@ -501,8 +406,6 @@ def initiate_training(
             ) = initialise_model(
                 use_autoencoder=False,
                 score_net_in_dim=score_net_in_dim,
-                score_net_index_dim=score_net_index_dim,
-                score_net_hidden_dim=score_net_hidden_dim,
                 dataset=dataset,
                 data_type=data_type,
                 batch_size=batch_size,
@@ -511,7 +414,6 @@ def initiate_training(
                 num_res_blocks=num_res_blocks,
                 dropout=dropout,
                 lr_score_net=lr_score_net,
-                enc_in_dim=enc_in_dim,
                 padding_required=padding_required,
                 load_checkpoint_score_net=load_checkpoint_score_net,
                 loading_checkpoint_filepath_score_net=loading_checkpoint_filepath_score_net,
@@ -531,8 +433,6 @@ def initiate_training(
             ) = initialise_model(
                 use_autoencoder=False,
                 score_net_in_dim=score_net_in_dim,
-                score_net_index_dim=score_net_index_dim,
-                score_net_hidden_dim=score_net_hidden_dim,
                 dataset=dataset,
                 data_type=data_type,
                 batch_size=batch_size,
@@ -541,7 +441,6 @@ def initiate_training(
                 num_res_blocks=num_res_blocks,
                 dropout=dropout,
                 lr_score_net=lr_score_net,
-                enc_in_dim=enc_in_dim,
                 padding_required=padding_required,
                 load_checkpoint_score_net=load_checkpoint_score_net,
                 loading_checkpoint_filepath_score_net=loading_checkpoint_filepath_score_net,
@@ -563,20 +462,20 @@ def initiate_training(
 
 
 def generate_samples(
-    loading_checkpoint_filepath_score_net=args.loading_checkpoint_filepath_score_net,
-    load_checkpoint_score_net=args.load_checkpoint_score_net,
-    time_steps=args.euler_maruyama_time_steps,
-    device=device,
-    col_dim=args.score_net_in_dim,
-    num_samples_to_generate=args.num_samples_to_generate,
-    use_autoencoder=args.use_autoencoder,
-    load_checkpoint_autoencoder=args.load_checkpoint_autoencoder,
-    loading_checkpoint_filepath_autoencoder=args.loading_checkpoint_filepath_autoencoder,
-    generated_data_dir_path=generated_data_dir_path,
-    save_generated_data=args.save_generated_data,
-    data_type=args.data_type,
-    batch_size=args.batch_size,
-    data_dir=args.data_dir,
+    loading_checkpoint_filepath_score_net,
+    load_checkpoint_score_net,
+    time_steps,
+    device,
+    col_dim,
+    num_samples_to_generate,
+    use_autoencoder,
+    load_checkpoint_autoencoder,
+    loading_checkpoint_filepath_autoencoder,
+    generated_data_dir_path,
+    save_generated_data,
+    data_type,
+    batch_size,
+    data_dir,
 ):
     os.makedirs(generated_data_dir_path, exist_ok=True)
 
@@ -796,7 +695,163 @@ def generate_samples(
 
 
 if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    experiment_name = time.strftime("%Y%m%d-%H%M%S")
+
+    arg_parser = argparse.ArgumentParser()
+
+    arg_parser.add_argument(
+        "--mode", type=str, choices=["train", "generate"], default="train"
+    )
+    arg_parser.add_argument(
+        "--load_checkpoint_score_net", type=bool, default=False
+    )  # False for training
+    arg_parser.add_argument(
+        "--load_checkpoint_autoencoder", type=bool, default=False
+    )  # False for training
+    arg_parser.add_argument("--use_autoencoder", type=bool, default=True)
+    arg_parser.add_argument(
+        "--score_net_architecture",
+        type=str,
+        choices=["sdeflow_unet"],
+        default="sdeflow_unet",
+    )
+
+    arg_parser.add_argument("--expname", type=str, default=experiment_name)
+    arg_parser.add_argument("--output_dir", type=str, default="outputs")
+    arg_parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
+
+    arg_parser.add_argument(
+        "--loading_checkpoint_filepath_score_net",
+        type=str,
+        default=None,
+    )
+    arg_parser.add_argument(
+        "--data_type", type=str, choices=["binary", "mixed"], default="mixed"
+    )
+    arg_parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["mimic3_icd_binary", "hong"],
+        default="hong",
+    )
+    arg_parser.add_argument("--n_epochs_score_net", type=int, default=200)
+    arg_parser.add_argument("--lr_score_net", type=float, default=0.001)
+    arg_parser.add_argument("--batch_size", type=int, default=256)
+    arg_parser.add_argument("--T", type=float, default=1.0)
+    arg_parser.add_argument("--output_step", type=int, default=1)
+    arg_parser.add_argument("--checkpoint_save_step_score_net", type=int, default=1)
+    arg_parser.add_argument("--n_epochs_autoencoder", type=int, default=200)
+
+    arg_parser.add_argument(
+        "--lr_autoencoder", type=float, default=0.001
+    )  # MIMIC 0.001
+
+    arg_parser.add_argument("--enc_out_dim", type=int, default=144)
+    arg_parser.add_argument(
+        "--score_net_in_dim", type=int, default=144
+    )  # if using autoenc: MIMIC = 144 # o/w this should be the same as column size
+
+    arg_parser.add_argument("--num_samples_to_generate", type=int, default=1000)
+    arg_parser.add_argument("--euler_maruyama_time_steps", type=int, default=1000)
+    arg_parser.add_argument("--test_train_size", type=float, default=0.30)
+    arg_parser.add_argument("--save_test_train_data", type=bool, default=False)
+    arg_parser.add_argument("--save_generated_data", type=bool, default=True)
+    arg_parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="data/hong_data",
+        choices=["data/hong_data", "data/mimic_data"],
+    )
+    arg_parser.add_argument(
+        "--loading_checkpoint_filepath_autoencoder",
+        type=str,
+        default=None,
+    )
+    arg_parser.add_argument("--output_step_autoencoder", type=int, default=50)
+    arg_parser.add_argument("--checkpoint_save_step_autoencoder", type=int, default=50)
+    arg_parser.add_argument("--padding_required", type=bool, default=False)
+
+    args = arg_parser.parse_args()
+    if not args.use_autoencoder:
+        folder_name_keys = [
+            "expname",
+            "mode",
+            "dataset",
+            "score_net_architecture",
+            "n_epochs_score_net",
+            "lr_score_net",
+            "batch_size",
+        ]
+    else:
+        folder_name_keys = [
+            "expname",
+            "mode",
+            "dataset",
+            "score_net_architecture",
+            "n_epochs_score_net",
+            "lr_score_net",
+            "batch_size",
+            "n_epochs_autoencoder",
+            "lr_autoencoder",
+        ]
+
+    # Setting up the output directory
+    folder_name = "-".join([str(getattr(args, k)) for k in folder_name_keys])
+    create(args.output_dir, folder_name)
+    output_dir_path = os.path.join(args.output_dir, folder_name)
+
+    checkpoint_dir_path = os.path.join(output_dir_path, args.checkpoint_dir)
+    generated_data_dir_path = os.path.join(output_dir_path, "generated_data")
+    test_train_data_dump_path = os.path.join(output_dir_path, "test_train_data_used")
+    create(checkpoint_dir_path)
+
     if args.mode == "train":
-        initiate_training()
+        initiate_training(
+            n_epochs_score_net=args.n_epochs_score_net,
+            output_step_score_net=args.output_step,
+            checkpoint_save_step_score_net=args.checkpoint_save_step_score_net,
+            checkpoint_dir_path=checkpoint_dir_path,
+            use_autoencoder=args.use_autoencoder,
+            n_epochs_autoencoder=args.n_epochs_autoencoder,
+            output_step_autoencoder=args.output_step_autoencoder,
+            checkpoint_save_step_autoencoder=args.checkpoint_save_step_autoencoder,
+            batch_size=args.batch_size,
+            data_type=args.data_type,
+            dataset=args.dataset,
+            score_net_architecture=args.score_net_architecture,
+            score_net_in_dim=args.score_net_in_dim,
+            score_net_index_dim=args.score_net_index_dim,
+            score_net_hidden_dim=args.score_net_hidden_dim,
+            padding_required=args.padding_required,
+            channel_mult=None,
+            num_res_blocks=None,
+            dropout=None,
+            lr_score_net=args.lr_score_net,
+            lr_autoencoder=args.lr_autoencoder,
+            T=args.T,
+            load_checkpoint_score_net=args.load_checkpoint_score_net,
+            loading_checkpoint_filepath_score_net=args.loading_checkpoint_filepath_score_net,
+            load_checkpoint_autoencoder=args.load_checkpoint_autoencoder,
+            loading_checkpoint_filepath_autoencoder=args.loading_checkpoint_filepath_autoencoder,
+            data_dir=args.data_dir,
+            test_size=args.test_train_size,
+            save_test_train_data=args.save_test_train_data,
+        )
     if args.mode == "generate":
-        xs, final_samples = generate_samples()
+        xs, final_samples = generate_samples(
+            loading_checkpoint_filepath_score_net=args.loading_checkpoint_filepath_score_net,
+            load_checkpoint_score_net=args.load_checkpoint_score_net,
+            time_steps=args.euler_maruyama_time_steps,
+            device=device,
+            col_dim=args.score_net_in_dim,
+            num_samples_to_generate=args.num_samples_to_generate,
+            use_autoencoder=args.use_autoencoder,
+            load_checkpoint_autoencoder=args.load_checkpoint_autoencoder,
+            loading_checkpoint_filepath_autoencoder=args.loading_checkpoint_filepath_autoencoder,
+            generated_data_dir_path=generated_data_dir_path,
+            save_generated_data=args.save_generated_data,
+            data_type=args.data_type,
+            batch_size=args.batch_size,
+            data_dir=args.data_dir,
+        )
