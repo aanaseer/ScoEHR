@@ -821,8 +821,6 @@ if __name__ == "__main__":
             dataset=args.dataset,
             score_net_architecture=args.score_net_architecture,
             score_net_in_dim=args.score_net_in_dim,
-            score_net_index_dim=args.score_net_index_dim,
-            score_net_hidden_dim=args.score_net_hidden_dim,
             padding_required=args.padding_required,
             channel_mult=None,
             num_res_blocks=None,
