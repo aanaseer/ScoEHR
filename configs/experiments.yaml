@@ -1,0 +1,62 @@
+---
+ example:
+   mode: null # [train, generate]
+   use_autoencoder: null # [True, False]
+   score_net_architecture: null # [sdeflow_unet] Intending to add further options in the future
+   score_net_in_dim: null # Input dimension for the score net
+   output_dir: null # Path to the output directory
+   checkpoint_dir: null # Path to the checkpoint directory
+   load_checkpoint_score_net: null # [True, False] Whether to load a checkpoint for the score net
+   load_checkpoint_autoencoder: null # [True, False] Whether to load a checkpoint for the autoencoder
+   loading_checkpoint_filepath_score_net: null # Path to the checkpoint file for the score net
+   loading_checkpoint_filepath_autoencoder: null # Path to the checkpoint file for the autoencoder
+   dataset: null # [mimic3_icd_binary, hong]
+   n_epochs_score_net: null # Number of epochs to train the score net
+   n_epochs_autoencoder: null # Number of epochs to train the autoencoder
+   lr_score_net: null # Learning rate for the score net
+   lr_autoencoder: null # Learning rate for the autoencoder
+   batch_size: null
+   T: null # TODO: What is this hyperparameter?
+   output_step_score_net: null # When to print output for the score net
+   output_step_autoencoder: null # When to print output for the autoencoder
+   checkpoint_save_step_score_net: null # When to save the checkpoint for the score net
+   checkpoint_save_step_autoencoder: null # When to save the checkpoint for the autoencoder
+   num_samples_to_generate: null # Number of samples to generate
+   euler_maruyama_time_steps: null # Number of time steps for Euler-Maruyama
+   test_train_size: null # Percentage of samples to use for testing
+   save_test_train_data: null # [True, False] Whether to save the test and train data
+   save_generated_samples: null # [True, False] Whether to save the generated samples
+   data_dir: null # Path to the data directory
+   padding_required: null # [True, False] Whether padding is required for the data
+
+---
+  hong_train:
+    mode: train
+    use_autoencoder: True
+    score_net_architecture: sdeflow_unet
+    score_net_in_dim: 144
+    output_dir: outputs
+    checkpoint_dir: checkpoints
+    load_checkpoint_score_net: False
+    load_checkpoint_autoencoder: False
+    loading_checkpoint_filepath_score_net: null
+    loading_checkpoint_filepath_autoencoder: null
+    dataset: hong
+    n_epochs_score_net: 5
+    n_epochs_autoencoder: 20
+    lr_score_net: 0.001
+    lr_autoencoder: 0.001
+    batch_size: 256
+    T: 1
+    output_step_score_net: 1
+    output_step_autoencoder: 10
+    checkpoint_save_step_score_net: 1
+    checkpoint_save_step_autoencoder: 10
+    num_samples_to_generate: null
+    euler_maruyama_time_steps: null
+    test_train_size: 0.3
+    save_test_train_data: False
+    save_generated_samples: null
+    data_dir: data/hong_data
+    padding_required: False
+

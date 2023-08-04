@@ -50,7 +50,7 @@ def train_score_net(
         if (epoch + 1) % output_step == 0 or epoch == 0 or epoch == n_epochs:
             time_elapsed = time.time() - start_time
             print(
-                f"Epoch: {epoch}  |  Time: {time_elapsed / output_step:.2f}s/epoch  \
+                f"Epoch: {epoch+1}  |  Time: {time_elapsed / output_step:.2f}s/epoch  \
                     | Loss: {avg_loss:.5f} | Learning rate: {learning_rate_used}"
             )
             start_time = time.time()
@@ -59,7 +59,7 @@ def train_score_net(
             print(f"==> Saving checkpoint to: {checkpoint_dir_path}")
 
             checkpoint_file_name_and_path = os.path.join(
-                checkpoint_dir_path, f"checkpoint_score_epoch_{epoch}.pt"
+                checkpoint_dir_path, f"checkpoint_score_epoch_{epoch+1}.pt"
             )
             torch.save([loss_fn_instance, optimiser], checkpoint_file_name_and_path)
 
