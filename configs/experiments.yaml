@@ -16,7 +16,7 @@
    lr_score_net: null # Learning rate for the score net
    lr_autoencoder: null # Learning rate for the autoencoder
    batch_size: null
-   T: null # TODO: What is this hyperparameter?
+   T: null # The end time for the diffusion process
    output_step_score_net: null # When to print output for the score net
    output_step_autoencoder: null # When to print output for the autoencoder
    checkpoint_save_step_score_net: null # When to save the checkpoint for the score net

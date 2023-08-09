@@ -828,13 +828,13 @@ if __name__ == "__main__":
         if args.use_autoencoder:
             score_net_in_dim = args.score_net_in_dim
         else:
-            score_net_in_dim = 0  # TODO: What should this be
+            score_net_in_dim = 1071
     elif args.dataset == "hong":
         data_type = "mixed"
         if args.use_autoencoder:
             score_net_in_dim = args.score_net_in_dim
         else:
-            score_net_in_dim = 0  # TODO: What should this be
+            score_net_in_dim = 625
     else:
         raise ValueError(f"{args.dataset} data_type and enc_dim not been chosen.")
 
